@@ -35,7 +35,7 @@ flowchart LR
 - [x] Step 1: Environment setup and local model check
 - [x] Step 2: Synthetic data (help articles and fake customers)
 - [x] Step 3: RAG search with re-ranking
-- [ ] Step 4: MCP tool server
+- [x] Step 4: MCP tool server
 - [ ] Step 5: PII guardrails
 - [ ] Step 6: LangGraph agent
 - [ ] Step 7: FastAPI service
@@ -82,3 +82,25 @@ Measured on a Windows laptop with no GPU (Ollama reports 100% CPU):
 - **Embedding:** A model turns each chunk of text into a vector, a list of numbers (384 for `all-MiniLM-L6-v2`). Text with similar meaning gets nearby vectors, so a question can be matched to chunks by meaning rather than exact words.
 - **Chunking and overlap:** Embedding a whole article blurs several topics into one vector and can exceed the model's input limit. Chunks keep each vector focused. Overlap stops a sentence or idea from being cut at a chunk boundary.
 - **Two-stage retrieval:** Vector search is fast but compares the question and chunks separately. A cross-encoder re-ranker reads the question and chunk together, so it is more accurate but too slow for the whole corpus. I fetch 20 candidates with the fast method, then re-rank to the best 4. A wider candidate set means the right chunk is not missed if vector search ranks it lower, at the cost of extra latency per query.
+
+### Step 4: MCP tool server
+
+Three tools served over MCP (stdio transport), tested with a small client script:
+
+| Tool | Type | What it returns |
+| --- | --- | --- |
+| `lookup_customer` | Read | Plan and open incident. No name, email or phone. |
+| `check_line_status` | Read | Line status (`active`, `suspended_unpaid`, `no_signal`, `roaming_blocked`, `sim_not_activated`) |
+| `open_ticket` | Write | A new ticket ID. Requires human approval in the agent (Step 6). |
+
+- **Least data:** The tools return only what the agent needs, so personal contact details never reach the model.
+- **Server-side validation:** An unknown customer ID returns a clean error instead of crashing.
+- **Dependency pinning:** My first install pulled `mcp` 2.x, where `FastMCP` was renamed `MCPServer`. The server crashed on import and the client only reported "Connection closed". I pinned `mcp<2` and recorded exact versions in `requirements.txt`. Fast-moving AI libraries make breaking changes, so versions must be pinned.
+- **Debugging approach:** When a client reports a vague connection error, run the server directly to see its own error.
+
+**Concepts, in my own words**
+
+- **MCP:** A standard way for AI applications to discover and call tools. A server advertises its tools (names, descriptions, inputs); a client lists them, shows them to the model and runs the calls. Unlike a plain API, the server describes itself in a form a model can read.
+- **The model asks, my code does:** The model never runs a tool. It outputs a request naming the tool and its inputs. My code runs the function through the MCP client and returns the result to the model.
+- **Test client vs agent:** In my test script I chose the calls in advance. In the agent, the model will choose the tool and inputs at runtime from the question and the tool descriptions.
+- **`list_tools`:** Returns each tool's name, description (from the docstring) and input fields, which the agent passes to the model.
