@@ -10,8 +10,9 @@ collection = chromadb.PersistentClient(path="chroma_db").get_collection(
 )
 
 
-def search(question, top_k=4, candidates=20, use_reranker=True):
-    """Return the best `top_k` chunks for a question, with their source file."""
+def search(question, top_k=4, candidates=20, use_reranker=True, min_score=0.0):
+    """Return up to `top_k` chunks. With the re-ranker on, drop any chunk
+    scoring below `min_score`, so weak matches are not passed to the model."""
     query_vector = embedder.encode([question]).tolist()
     found = collection.query(query_embeddings=query_vector,
                              n_results=candidates)
@@ -26,6 +27,7 @@ def search(question, top_k=4, candidates=20, use_reranker=True):
         for r, score in zip(results, scores):
             r["score"] = float(score)
         results.sort(key=lambda r: r["score"], reverse=True)
+        results = [r for r in results if r["score"] >= min_score]
 
     return results[:top_k]
 
