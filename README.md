@@ -33,7 +33,7 @@ flowchart LR
 ## Progress
 
 - [x] Step 1: Environment setup and local model check
-- [ ] Step 2: Synthetic data (help articles and fake customers)
+- [x] Step 2: Synthetic data (help articles and fake customers)
 - [ ] Step 3: RAG search with re-ranking
 - [ ] Step 4: MCP tool server
 - [ ] Step 5: PII guardrails
