@@ -104,3 +104,32 @@ Three tools served over MCP (stdio transport), tested with a small client script
 - **The model asks, my code does:** The model never runs a tool. It outputs a request naming the tool and its inputs. My code runs the function through the MCP client and returns the result to the model.
 - **Test client vs agent:** In my test script I chose the calls in advance. In the agent, the model will choose the tool and inputs at runtime from the question and the tool descriptions.
 - **`list_tools`:** Returns each tool's name, description (from the docstring) and input fields, which the agent passes to the model.
+
+### Step 5: PII guardrails
+
+Three guardrails around the model:
+
+1. **Before the model:** personal data in the customer's message is replaced with numbered placeholders (`<PERSON_1>`, `<PHONE_NUMBER_1>`). The lookup table stays in my program's memory and is never sent to the model. The real values are restored only in the reply to the same customer.
+2. **After the model:** the answer must cite a retrieved source.
+3. **After the model:** the answer must not contain personal data.
+
+Measured on 20 synthetic customers, with 8 automated tests passing:
+
+| Check | Result |
+| --- | --- |
+| Names masked | 19 / 20 |
+| Phone numbers masked | 20 / 20 |
+| Emails masked | 20 / 20 |
+| Customer IDs kept (needed by the tools) | 20 / 20 |
+| Ordinary support sentences wrongly changed | 0 / 3 |
+
+**Findings**
+
+- **Built-in detection missed my own data format.** The UK mobile numbers in my fake data come from a range reserved for fiction, so Presidio's phone detector treated them as invalid and ignored them. I added a custom pattern recogniser, after which all 20 were caught. Always test a detector on your own data.
+- **Names are harder than patterns.** Emails and phone numbers follow fixed shapes, so pattern matching is reliable. Names are found by a statistical language model that guesses from context. It missed "Mason Brown", probably because both words are also ordinary words (I have not confirmed this). Masking reduces risk but does not remove it, so the design uses several layers: minimal data from the tools (Step 4), masking before the model, and checks on the answer.
+
+**Concepts, in my own words**
+
+- **Guardrail:** a check around the model, before or after it, that keeps its behaviour safe and as intended. Masking personal data and requiring a cited source are both guardrails.
+- **Placeholders, not deletion:** the model sees `<PERSON_1>`, so it can still write a natural reply. My own code, not the model, puts the real value back afterwards.
+- **Patterns vs a trained model:** emails and phone formats can be matched with patterns. Names have no fixed shape, so a trained model recognises them from context and can make mistakes.
