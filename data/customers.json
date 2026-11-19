@@ -1,0 +1,182 @@
+[
+  {
+    "id": "C001",
+    "name": "Aarav Patel",
+    "email": "aarav.patel@example.com",
+    "phone": "+44 7700 900125",
+    "plan": "Unlimited 5G",
+    "line_status": "active",
+    "open_incident": null
+  },
+  {
+    "id": "C002",
+    "name": "Priya Smith",
+    "email": "priya.smith@example.com",
+    "phone": "+44 7700 900854",
+    "plan": "Basic 5G",
+    "line_status": "roaming_blocked",
+    "open_incident": "Billing dispute open"
+  },
+  {
+    "id": "C003",
+    "name": "Liam Miller",
+    "email": "liam.miller@example.com",
+    "phone": "+44 7700 900189",
+    "plan": "Home Broadband 500",
+    "line_status": "suspended_unpaid",
+    "open_incident": null
+  },
+  {
+    "id": "C004",
+    "name": "Sofia Sharma",
+    "email": "sofia.sharma@example.com",
+    "phone": "+44 7700 900195",
+    "plan": "Plus 5G",
+    "line_status": "active",
+    "open_incident": "Router firmware fault"
+  },
+  {
+    "id": "C005",
+    "name": "Noah Nair",
+    "email": "noah.nair@example.com",
+    "phone": "+44 7700 900127",
+    "plan": "Home Broadband 500",
+    "line_status": "active",
+    "open_incident": "Billing dispute open"
+  },
+  {
+    "id": "C006",
+    "name": "Meera Miller",
+    "email": "meera.miller@example.com",
+    "phone": "+44 7700 900529",
+    "plan": "Plus 5G",
+    "line_status": "suspended_unpaid",
+    "open_incident": "Router firmware fault"
+  },
+  {
+    "id": "C007",
+    "name": "Oliver Brown",
+    "email": "oliver.brown@example.com",
+    "phone": "+44 7700 900928",
+    "plan": "Basic 5G",
+    "line_status": "sim_not_activated",
+    "open_incident": "SIM replacement pending"
+  },
+  {
+    "id": "C008",
+    "name": "Zara Smith",
+    "email": "zara.smith@example.com",
+    "phone": "+44 7700 900814",
+    "plan": "Home Broadband 100",
+    "line_status": "active",
+    "open_incident": null
+  },
+  {
+    "id": "C009",
+    "name": "Ethan Smith",
+    "email": "ethan.smith@example.com",
+    "phone": "+44 7700 900320",
+    "plan": "Unlimited 5G",
+    "line_status": "active",
+    "open_incident": null
+  },
+  {
+    "id": "C010",
+    "name": "Anika Taylor",
+    "email": "anika.taylor@example.com",
+    "phone": "+44 7700 900199",
+    "plan": "Unlimited 5G",
+    "line_status": "sim_not_activated",
+    "open_incident": null
+  },
+  {
+    "id": "C011",
+    "name": "Lucas Nair",
+    "email": "lucas.nair@example.com",
+    "phone": "+44 7700 900370",
+    "plan": "Basic 5G",
+    "line_status": "roaming_blocked",
+    "open_incident": "Network outage in area"
+  },
+  {
+    "id": "C012",
+    "name": "Isha Miller",
+    "email": "isha.miller@example.com",
+    "phone": "+44 7700 900227",
+    "plan": "Home Broadband 100",
+    "line_status": "active",
+    "open_incident": "Router firmware fault"
+  },
+  {
+    "id": "C013",
+    "name": "Mason Brown",
+    "email": "mason.brown@example.com",
+    "phone": "+44 7700 900949",
+    "plan": "Home Broadband 500",
+    "line_status": "sim_not_activated",
+    "open_incident": null
+  },
+  {
+    "id": "C014",
+    "name": "Leela Nair",
+    "email": "leela.nair@example.com",
+    "phone": "+44 7700 900296",
+    "plan": "Basic 5G",
+    "line_status": "active",
+    "open_incident": "Billing dispute open"
+  },
+  {
+    "id": "C015",
+    "name": "Daniel Rossi",
+    "email": "daniel.rossi@example.com",
+    "phone": "+44 7700 900891",
+    "plan": "Unlimited 5G",
+    "line_status": "active",
+    "open_incident": "SIM replacement pending"
+  },
+  {
+    "id": "C016",
+    "name": "Kavya Rossi",
+    "email": "kavya.rossi@example.com",
+    "phone": "+44 7700 900987",
+    "plan": "Basic 5G",
+    "line_status": "suspended_unpaid",
+    "open_incident": null
+  },
+  {
+    "id": "C017",
+    "name": "Henry Khan",
+    "email": "henry.khan@example.com",
+    "phone": "+44 7700 900750",
+    "plan": "Unlimited 5G",
+    "line_status": "active",
+    "open_incident": null
+  },
+  {
+    "id": "C018",
+    "name": "Nina Iyer",
+    "email": "nina.iyer@example.com",
+    "phone": "+44 7700 900314",
+    "plan": "Unlimited 5G",
+    "line_status": "roaming_blocked",
+    "open_incident": "Billing dispute open"
+  },
+  {
+    "id": "C019",
+    "name": "Arjun Patel",
+    "email": "arjun.patel@example.com",
+    "phone": "+44 7700 900723",
+    "plan": "Plus 5G",
+    "line_status": "no_signal",
+    "open_incident": "Billing dispute open"
+  },
+  {
+    "id": "C020",
+    "name": "Emma Rossi",
+    "email": "emma.rossi@example.com",
+    "phone": "+44 7700 900267",
+    "plan": "Home Broadband 100",
+    "line_status": "suspended_unpaid",
+    "open_incident": null
+  }
+]
