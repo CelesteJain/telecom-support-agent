@@ -36,7 +36,7 @@ flowchart LR
 - [x] Step 2: Synthetic data (help articles and fake customers)
 - [x] Step 3: RAG search with re-ranking
 - [x] Step 4: MCP tool server
-- [ ] Step 5: PII guardrails
+- [x] Step 5: PII guardrails
 - [ ] Step 6: LangGraph agent
 - [ ] Step 7: FastAPI service
 - [ ] Step 8: Evaluation suite
@@ -133,3 +133,30 @@ Measured on 20 synthetic customers, with 8 automated tests passing:
 - **Guardrail:** a check around the model, before or after it, that keeps its behaviour safe and as intended. Masking personal data and requiring a cited source are both guardrails.
 - **Placeholders, not deletion:** the model sees `<PERSON_1>`, so it can still write a natural reply. My own code, not the model, puts the real value back afterwards.
 - **Patterns vs a trained model:** emails and phone formats can be matched with patterns. Names have no fixed shape, so a trained model recognises them from context and can make mistakes.
+
+### Step 6a: A minimal LangGraph agent
+
+The first version of the agent is a straight line: `mask` hides personal data, `answer` asks the local model, and `unmask` restores the real values in the reply.
+
+```mermaid
+flowchart LR
+    A[question] --> B[mask]
+    B --> C[answer]
+    C --> D[unmask]
+    D --> E[reply]
+```
+
+- **LangGraph basics:** The *state* is one shared dictionary that every step reads and writes. A *node* is a Python function that returns only the fields it changed. An *edge* sets which node runs next.
+- **Guardrail check:** The line the model received contained `<PERSON_1>` and `<PHONE_NUMBER_1>` instead of the real values, and the real values were restored only in the reply to the customer.
+- **Honest note:** For a straight line, plain Python would do the same job in four lines. I used LangGraph because the next steps add branching (6b), a tool-calling loop (6d) and a pause for human approval (6e), which are the things a graph handles well.
+
+### Step 6b: Classify and branch
+
+The agent now decides what kind of question it is dealing with before it does anything else. A `classify` node asks the model for one word, `knowledge` (general troubleshooting) or `account` (about the customer's own line, bill or ticket). A conditional edge reads that word from the state and routes to `retrieve` or `diagnose`.
+
+- **Result:** 5 of 5 on a small set of test questions (3 knowledge, 2 account). This is a tiny sample, so it shows the wiring works, not that the classifier is reliable. The full evaluation in Step 8 will use many more questions, including ambiguous ones.
+- **Settings:** `temperature` 0 so the same question gets the same classification, and a 5-token limit because only one word is needed, which is faster on a CPU.
+- **Defensive parsing:** The routing table only accepts exact values, but models do not always follow "reply with one word". `parse_intent` reads the reply, extracts a valid value, and defaults to `knowledge` when unclear, so the graph never receives an unexpected value.
+- **Finding:** With no tools or retrieved material yet, the model answered an account question with "I'll check on line C002 right away", promising an action it cannot perform. A model writes plausible text whether or not it can act. Retrieval (6c) and tools (6d) are the fix, and a check on the final answer (6e) is the safety net.
+- **Extra test:** "My bill looks wrong", an account question with no ID, was classified as `account`, as expected. The model then asked the customer for their account number.
+- **Why the model behaves this way:** A language model predicts the most plausible next text. Trained on large amounts of text, including support conversations, and tuned to be a helpful assistant, it writes what a good support agent typically writes: "I'll check right away" and "Can you give me your account number?". It does not know what it is actually able to do. The false promise and the useful question come from the same mechanism, so the fix is to ground it with retrieved material and tool results, instruct it clearly, and check its answers.
