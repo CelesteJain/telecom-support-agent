@@ -215,6 +215,21 @@ The `diagnose` node now lets the model use the read-only MCP tools (`lookup_cust
 - **Tool calling:** the model sends a request containing a tool name and inputs. My agent code runs it through the MCP client, and the function executes in the MCP server. The result goes back to the model as a `tool` message. The model never talks to the MCP server directly.
 - **How the model knows the tools:** my code asks the MCP server for its tool list and passes the names, descriptions and inputs to the model with each request. The docstrings are what the model reads.
 
+### Step 6e: human approval and answer check
+- Write actions (open_ticket) are never run by the model. The tool loop records the request,
+  the graph pauses with interrupt(), and only a human "y" runs it.
+- A checkpointer saves the State under a thread_id, which is what lets the paused run resume.
+- Code before interrupt() re-runs on resume, so it must have no side effects.
+- A check node validates every answer in code: citation present, citation real, no PII.
+  Failing answers are replaced with a safe reply.
+- Result: 9 tests pass. The wifi question passed the check; the ticket request paused,
+  and TICKET-1001 was created only after approval.
+
+**Concepts in my own words**
+- A checkpointer saves the State so a paused run can continue with its context.
+- The prompt is a soft control that injection can override; the approval gate is a hard control in code.
+- The answer check proves a citation exists, not that the sentence is true.
+
 ### Step 6e follow-up: what the first real runs taught me
 - The intent classifier returned "ticket" because my prompt listed it as an example word; fixed by naming the two allowed labels, adding a customer-ID rule, and logging unexpected replies.
 - Customer IDs are not masked on purpose: the tools need them and the answer goes back to the same user.
