@@ -8,8 +8,15 @@ from agent.guardrails import mask, unmask
 MODEL = "qwen2.5:7b"
 
 SYSTEM_PROMPT = (
-    "You are a helpful telecom customer support assistant. "
-    "Keep answers short and friendly."
+    "You are a customer support assistant for a telecom company.\n"
+    "Rules:\n"
+    "1. Answer ONLY from the context provided. Do not use outside knowledge.\n"
+    "2. After each fact, cite its source in square brackets, like [file-name.md].\n"
+    "3. If the context does not contain the answer, say you do not have that "
+    "information and suggest contacting support.\n"
+    "4. Never say you have done something or will do something. "
+    "You can only give information.\n"
+    "5. Keep answers short. Use numbered steps for instructions."
 )
 
 CLASSIFY_PROMPT = (
@@ -20,13 +27,20 @@ CLASSIFY_PROMPT = (
     "Message: {message}"
 )
 
+# Used when there is nothing to ground an answer on. The model is not called at all.
+NO_CONTEXT_REPLY = {
+    "knowledge": "I couldn't find this in our help articles. "
+                 "Please contact support and they will help you.",
+    "account": "I can't look up account details yet.",
+}
+
 
 class State(TypedDict):
     question: str          # what the customer typed
     masked_question: str   # the same text with personal data hidden
     mapping: dict          # placeholder -> real value (never sent to the model)
-    intent: str            # "knowledge" or "account"          (new in 6b)
-    context: list          # material found for the answer     (new in 6b)
+    intent: str            # "knowledge" or "account"
+    context: list          # items like {"source": "file.md", "text": "..."}   (changed in 6c)
     answer: str            # the model's reply (still contains placeholders)
     final_answer: str      # the reply with real values restored
 
@@ -57,19 +71,36 @@ def route_by_intent(state: State) -> str:
 
 
 def retrieve_node(state: State) -> dict:
-    return {"context": ["(help-article search is added in 6c)"]}
+    # Imported here so the search models only load when a question needs them
+    from rag.search import search
+
+    # We search with the masked question, so personal data never reaches the search either
+    return {"context": search(state["masked_question"])}
 
 
 def diagnose_node(state: State) -> dict:
-    return {"context": ["(account tools are added in 6d)"]}
+    # Placeholder until the MCP tools arrive in 6d
+    return {"context": []}
+
+
+def format_context(context: list) -> str:
+    return "\n\n".join(f"[{item['source']}]\n{item['text']}" for item in context)
 
 
 def answer_node(state: State) -> dict:
+    # Nothing found: do not ask the model, which would only improvise
+    if not state["context"]:
+        return {"answer": NO_CONTEXT_REPLY[state["intent"]]}
+
+    user_message = (
+        f"Context:\n{format_context(state['context'])}\n\n"
+        f"Customer question: {state['masked_question']}"
+    )
     reply = ollama.chat(
         model=MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": state["masked_question"]},
+            {"role": "user", "content": user_message},
         ],
     )
     return {"answer": reply["message"]["content"]}
@@ -103,24 +134,16 @@ def build_graph():
 
 
 if __name__ == "__main__":
-    # Part 1: test only the classifier on a few questions (fast, one short call each)
-    tests = [
-        ("My router has no internet since yesterday", "knowledge"),
-        ("How do I change my wifi password?", "knowledge"),
-        ("What does a blinking red light on the router mean?", "knowledge"),
-        ("Can you check the line status for C002?", "account"),
-        ("I was charged twice this month, my ID is C005", "account"),
-    ]
-    correct = 0
-    for question, expected in tests:
-        got = classify_node({"masked_question": question})["intent"]
-        correct += got == expected
-        print("OK  " if got == expected else "MISS", got.ljust(9), "|", question)
-    print(f"Classifier: {correct}/{len(tests)} correct\n")
-
-    # Part 2: run the whole graph once and see which branch it took
     app = build_graph()
-    result = app.invoke({"question": "Hi, I'm John Smith. Can you check the line for C002?"})
-    print("INTENT       :", result["intent"])
-    print("CONTEXT      :", result["context"])
-    print("CUSTOMER GETS:", result["final_answer"])
+    questions = [
+        "My wifi keeps cutting out",
+        "How do I make pasta carbonara?",
+        "Hi, I'm John Smith. Can you check the line for C002?",
+    ]
+    for question in questions:
+        result = app.invoke({"question": question})
+        print("QUESTION:", question)
+        print("INTENT  :", result["intent"])
+        print("SOURCES :", [item["source"] for item in result["context"]])
+        print("ANSWER  :", result["final_answer"])
+        print()
