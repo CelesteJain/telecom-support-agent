@@ -184,3 +184,33 @@ Results from three test questions:
 - **Grounding:** the model does not know my private help articles, so retrieval supplies them and the model writes the answer from them.
 - **Safer fallback:** when nothing is found, the code returns a fixed reply, so the model never improvises.
 - **Masked search:** the question is masked before the search as well, so personal data does not reach any other component.
+
+### Step 6d: MCP tool calling
+
+The `diagnose` node now lets the model use the read-only MCP tools (`lookup_customer`, `check_line_status`) in a loop: the model requests a tool, my code runs it through the MCP client, the result goes back to the model, and this repeats until the model stops asking or a round limit is hit. The collected tool results go into the same `{source, text}` context as the help-article passages, and the `answer` node writes the reply with citations like `[tool:check_line_status]`.
+
+| Question | Behaviour |
+| --- | --- |
+| "...check the line for C002?" | Called `check_line_status`, answered `roaming_blocked`, cited the tool |
+| "What plan is customer C001 on?" | Called `lookup_customer`, answered Unlimited 5G, cited the tool |
+| "...check the line for C999?" | Tool returned "No customer with id C999"; the agent reported it honestly |
+| "My bill looks wrong" | No tool called; asked for the customer ID |
+
+**Design choices**
+
+- **Least privilege:** only read-only tools are offered to the model. `open_ticket` changes data and stays hidden until a human-approval step exists (6e).
+- **Defence in depth:** even for offered tools, the tool name is checked again in code before running, in case the model invents a name or is manipulated by a malicious message (prompt injection).
+- **Failures become context:** a tool error is passed to the answer step instead of crashing the agent.
+- **Round limit:** the loop stops after 4 rounds.
+- **Two stages:** the model first gathers facts with tools, then the `answer` node writes the reply under the same grounding rules as for help articles.
+
+**Findings and limitations**
+
+- On the first test, the model added "roaming services are disabled", which was not in the tool result. The answer was grounded but embellished. The evaluation in Step 8 will measure how often answers stay inside their sources.
+- The MCP server is started fresh for every question (`asyncio.run`), which adds latency. A production system would keep the connection open.
+- Four test questions are a small sample. Reliability of tool use will be measured in Step 8.
+
+**Concepts, in my own words**
+
+- **Tool calling:** the model sends a request containing a tool name and inputs. My agent code runs it through the MCP client, and the function executes in the MCP server. The result goes back to the model as a `tool` message. The model never talks to the MCP server directly.
+- **How the model knows the tools:** my code asks the MCP server for its tool list and passes the names, descriptions and inputs to the model with each request. The docstrings are what the model reads.
