@@ -1,4 +1,5 @@
 from functools import lru_cache
+import re
 
 from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
 
@@ -69,6 +70,13 @@ def check_answer(answer, sources, needs_citation=True):
     problems = []
     if needs_citation and not any(name in answer for name in sources):
         problems.append("no_citation")
+
+    # Every [bracketed] citation must be a source we actually gave the model
+    cited = set(re.findall(r"\[([^\]]+)\]", answer))
+    unknown = sorted(c for c in cited if c not in sources)
+    if unknown:
+        problems.append("unknown_citation: " + ", ".join(unknown))
+
     leaked = get_analyzer().analyze(text=answer, language="en", entities=ENTITIES)
     if leaked:
         kinds = sorted({r.entity_type for r in leaked})

@@ -1,10 +1,15 @@
 from typing import TypedDict
 
-import ollama
-from langgraph.graph import END, START, StateGraph
+import json
+from typing import TypedDict
 
-from agent.guardrails import mask, unmask
-from agent.tools import run_tools
+import ollama
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
+
+from agent.guardrails import check_answer, mask, unmask
+from agent.tools import run_approved_tool, run_tools
 
 MODEL = "qwen2.5:7b"
 
@@ -15,8 +20,9 @@ SYSTEM_PROMPT = (
     "2. After each fact, cite its source in square brackets, like [file-name.md].\n"
     "3. If the context does not contain the answer, say you do not have that "
     "information and suggest contacting support.\n"
-    "4. Never say you have done something or will do something. "
-    "You can only give information.\n"
+    "4. Never say you have done something or will do something, unless the "
+    "context shows it was done (for example a ticket ID). "
+    "Otherwise you can only give information.\n"
     "5. Keep answers short. Use numbered steps for instructions."
 )
 
@@ -36,6 +42,10 @@ NO_CONTEXT_REPLY = {
                "(for example C001), or contact support.",
 }
 
+# Shown instead of an answer that failed the checks
+SAFE_REPLY = ("Sorry, I can't give a reliable answer to that. "
+              "Please contact support and they will help you.")
+
 
 class State(TypedDict):
     question: str          # what the customer typed
@@ -45,6 +55,8 @@ class State(TypedDict):
     context: list          # items like {"source": "file.md", "text": "..."}   (changed in 6c)
     answer: str            # the model's reply (still contains placeholders)
     final_answer: str      # the reply with real values restored
+    pending: dict          # a write action waiting for approval, or None   (new in 6e)
+    problems: list         # what the answer check found; empty = passed     (new in 6e)
 
 
 def mask_node(state: State) -> dict:
@@ -81,8 +93,37 @@ def retrieve_node(state: State) -> dict:
 
 
 def diagnose_node(state: State) -> dict:
-    # The model decides which read-only MCP tools to call; our code runs them
-    return {"context": run_tools(state["masked_question"], MODEL)}
+    # The model decides which MCP tools to call; our code runs the read-only ones
+    context, pending = run_tools(state["masked_question"], MODEL)
+    return {"context": context, "pending": pending}
+
+
+def route_after_diagnose(state: State) -> str:
+    return "approval" if state.get("pending") else "answer"
+
+
+def approval_node(state: State) -> dict:
+    pending = state["pending"]
+    # interrupt() pauses the whole graph here and hands this dict to the caller.
+    # IMPORTANT: when we resume, this node runs again from the top, so nothing
+    # above this line may have side effects.
+    decision = interrupt({
+        "action": pending["tool"],
+        "arguments": pending["arguments"],
+        "question": "Approve this action?",
+    })
+
+    if decision == "approve":
+        arguments = dict(pending["arguments"])
+        # The model only saw placeholders; restore real values before writing data
+        if "summary" in arguments:
+            arguments["summary"] = unmask(arguments["summary"], state["mapping"])
+        result = run_approved_tool(pending["tool"], arguments)
+        item = {"source": f"tool:{pending['tool']}", "text": json.dumps(result)}
+    else:
+        item = {"source": f"tool:{pending['tool']}",
+                "text": "The request was rejected by a human reviewer. No ticket was created."}
+    return {"context": state["context"] + [item], "pending": None}
 
 
 def format_context(context: list) -> str:
@@ -107,6 +148,14 @@ def answer_node(state: State) -> dict:
     )
     return {"answer": reply["message"]["content"]}
 
+def check_node(state: State) -> dict:
+    """Hard control: check the answer in code before the customer sees it."""
+    sources = [item["source"] for item in state["context"]]
+    problems = check_answer(state["answer"], sources,
+                            needs_citation=bool(state["context"]))
+    if problems:
+        return {"problems": problems, "answer": SAFE_REPLY}
+    return {"problems": []}
 
 def unmask_node(state: State) -> dict:
     return {"final_answer": unmask(state["answer"], state["mapping"])}
@@ -118,7 +167,9 @@ def build_graph():
     graph.add_node("classify", classify_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("diagnose", diagnose_node)
+    graph.add_node("approval", approval_node)
     graph.add_node("answer", answer_node)
+    graph.add_node("check", check_node)
     graph.add_node("unmask", unmask_node)
 
     graph.add_edge(START, "mask")
@@ -129,24 +180,43 @@ def build_graph():
         {"knowledge": "retrieve", "account": "diagnose"},
     )
     graph.add_edge("retrieve", "answer")
-    graph.add_edge("diagnose", "answer")
-    graph.add_edge("answer", "unmask")
+    graph.add_conditional_edges(
+        "diagnose",
+        route_after_diagnose,
+        {"approval": "approval", "answer": "answer"},
+    )
+    graph.add_edge("approval", "answer")
+    graph.add_edge("answer", "check")
+    graph.add_edge("check", "unmask")
     graph.add_edge("unmask", END)
-    return graph.compile()
+    # The checkpointer saves the state at every step, which is what makes pausing possible
+    return graph.compile(checkpointer=InMemorySaver())
+
+
+def ask(app, question: str, thread_id: str, decide=None) -> dict:
+    """Run one question. If the graph pauses for approval, ask the human and resume."""
+    config = {"configurable": {"thread_id": thread_id}}
+    result = app.invoke({"question": question}, config)
+    while result.get("__interrupt__"):
+        request = result["__interrupt__"][0].value
+        print("PAUSED  :", request)
+        answer = (decide or input)("Approve? (y/n) ").strip().lower()
+        decision = "approve" if answer == "y" else "reject"
+        result = app.invoke(Command(resume=decision), config)
+    return result
 
 
 if __name__ == "__main__":
     app = build_graph()
     questions = [
-        "Hi, I'm John Smith. Can you check the line for C002?",
-        "What plan is customer C001 on?",
-        "Can you check the line for C999?",
-        "My bill looks wrong",
+        "How do I fix my wifi that keeps dropping?",
+        "Hi, I'm John Smith. Customer C002 has had no roaming for days. Please open a ticket.",
     ]
-    for question in questions:
-        result = app.invoke({"question": question})
+    for number, question in enumerate(questions, start=1):
+        result = ask(app, question, thread_id=f"demo-{number}")
         print("QUESTION:", question)
         print("INTENT  :", result["intent"])
         print("CONTEXT :", result["context"])
+        print("PROBLEMS:", result["problems"])
         print("ANSWER  :", result["final_answer"])
         print()

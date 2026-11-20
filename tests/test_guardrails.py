@@ -44,3 +44,7 @@ def test_answer_with_citation_passes():
 def test_pii_in_answer_is_flagged():
     problems = check_answer("Call John Smith on 07700 900123 [a.md]", ["a.md"])
     assert any(p.startswith("pii_in_answer") for p in problems)
+
+def test_made_up_citation_is_flagged():
+    problems = check_answer("Restart it [made-up.md]", ["wifi-keeps-dropping.md"])
+    assert any(p.startswith("unknown_citation") for p in problems)
