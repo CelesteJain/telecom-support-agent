@@ -214,3 +214,8 @@ The `diagnose` node now lets the model use the read-only MCP tools (`lookup_cust
 
 - **Tool calling:** the model sends a request containing a tool name and inputs. My agent code runs it through the MCP client, and the function executes in the MCP server. The result goes back to the model as a `tool` message. The model never talks to the MCP server directly.
 - **How the model knows the tools:** my code asks the MCP server for its tool list and passes the names, descriptions and inputs to the model with each request. The docstrings are what the model reads.
+
+### Step 6e follow-up: what the first real runs taught me
+- The intent classifier returned "ticket" because my prompt listed it as an example word; fixed by naming the two allowed labels, adding a customer-ID rule, and logging unexpected replies.
+- Customer IDs are not masked on purpose: the tools need them and the answer goes back to the same user.
+- The answer check passed two answers that contained invented details (a "48 hours" promise, made-up portal steps). Citation checks prove a source exists, not that a sentence is true.

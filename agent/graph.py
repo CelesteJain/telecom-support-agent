@@ -1,3 +1,4 @@
+import re
 from typing import TypedDict
 
 import json
@@ -24,10 +25,12 @@ SYSTEM_PROMPT = (
     "context shows it was done (for example a ticket ID). "
     "Otherwise you can only give information.\n"
     "5. Keep answers short. Use numbered steps for instructions."
+    "6. Do not add details, times, promises or steps that are not in the context.\n"
 )
 
 CLASSIFY_PROMPT = (
-    "Classify the customer's message. Reply with exactly one word.\n"
+    "Classify the customer's message. Reply with exactly one word: "
+    "account or knowledge.\n"
     "account = the customer asks about their own line, plan, bill or ticket, "
     "or gives a customer ID such as C001.\n"
     "knowledge = a general how-to or troubleshooting question.\n\n"
@@ -65,12 +68,21 @@ def mask_node(state: State) -> dict:
 
 
 def parse_intent(text: str) -> str:
-    """Models do not always follow 'exactly one word', so read the reply
-    defensively and fall back to the safer choice."""
-    return "account" if "account" in text.lower() else "knowledge"
+    """Read the model's reply defensively, but make surprises visible."""
+    lowered = text.lower()
+    if "account" in lowered:
+        return "account"
+    if "knowledge" not in lowered:
+        print(f"WARNING: unexpected classifier reply {text!r}, defaulting to knowledge")
+    return "knowledge"
 
+
+CUSTOMER_ID = re.compile(r"\bC\d{3}\b")
 
 def classify_node(state: State) -> dict:
+    # Hard rule first: a customer ID always means an account question
+    if CUSTOMER_ID.search(state["masked_question"]):
+        return {"intent": "account"}
     reply = ollama.chat(
         model=MODEL,
         messages=[{"role": "user",
