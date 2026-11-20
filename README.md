@@ -37,8 +37,8 @@ flowchart LR
 - [x] Step 3: RAG search with re-ranking
 - [x] Step 4: MCP tool server
 - [x] Step 5: PII guardrails
-- [ ] Step 6: LangGraph agent
-- [ ] Step 7: FastAPI service
+- [x] Step 6: LangGraph agent
+- [x] Step 7: FastAPI service
 - [ ] Step 8: Evaluation suite
 - [ ] Step 9: Docker and CI
 - [ ] Step 10: Final write-up and demo
@@ -234,3 +234,17 @@ The `diagnose` node now lets the model use the read-only MCP tools (`lookup_cust
 - The intent classifier returned "ticket" because my prompt listed it as an example word; fixed by naming the two allowed labels, adding a customer-ID rule, and logging unexpected replies.
 - Customer IDs are not masked on purpose: the tools need them and the answer goes back to the same user.
 - The answer check passed two answers that contained invented details (a "48 hours" promise, made-up portal steps). Citation checks prove a source exists, not that a sentence is true.
+
+### Step 7: serving the agent over HTTP
+- POST /chat runs the graph under a new thread_id and returns either a finished answer
+  or {"status": "needs_approval", ...}. POST /approve resumes the paused thread.
+- /approve checks get_state(config).next first, so unknown or already-finished threads
+  get a 404 and an approval cannot be replayed.
+- Endpoints are plain `def` so FastAPI runs the slow graph in a worker thread; the MCP
+  loop uses asyncio.run, which would fail inside `async def`.
+- Pydantic rejects empty or oversized messages before any model call.
+- Known gaps: no authentication (the approver must be a logged-in staff member, not the
+  customer), and saved state is in memory so a restart loses paused approvals.
+
+**Concepts in my own words**
+- (write 2-3 lines here; "not sure" is fine, but try to rewrite one answer above in your own words)
