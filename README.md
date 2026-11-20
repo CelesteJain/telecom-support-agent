@@ -160,3 +160,27 @@ The agent now decides what kind of question it is dealing with before it does an
 - **Finding:** With no tools or retrieved material yet, the model answered an account question with "I'll check on line C002 right away", promising an action it cannot perform. A model writes plausible text whether or not it can act. Retrieval (6c) and tools (6d) are the fix, and a check on the final answer (6e) is the safety net.
 - **Extra test:** "My bill looks wrong", an account question with no ID, was classified as `account`, as expected. The model then asked the customer for their account number.
 - **Why the model behaves this way:** A language model predicts the most plausible next text. Trained on large amounts of text, including support conversations, and tuned to be a helpful assistant, it writes what a good support agent typically writes: "I'll check right away" and "Can you give me your account number?". It does not know what it is actually able to do. The false promise and the useful question come from the same mechanism, so the fix is to ground it with retrieved material and tool results, instruct it clearly, and check its answers.
+
+### Step 6c: Grounded answers with citations
+
+The `retrieve` node now searches the help articles (with the masked question) and the `answer` node builds a prompt from three parts: rules (system prompt), the retrieved passages labelled with their source files, and the question. If search finds nothing above the minimum score, the model is not called and a fixed reply is returned.
+
+Results from three test questions:
+
+| Question | Behaviour |
+| --- | --- |
+| "My wifi keeps cutting out" | Numbered answer matching `wifi-keeps-dropping.md`, with a citation |
+| "How do I make pasta carbonara?" | No sources found, fixed reply, model not called |
+| "...check the line for C002?" | "I can't look up account details yet." Tools come in 6d |
+
+**Findings**
+
+- **Grounding fixed the false promise.** In 6b the model said "I'll check right away". With rules, context and the fallback, it no longer claims actions it cannot take.
+- **Prompt rules are soft, code is hard.** The prompt asked for a citation after each fact, but the model cited once at the end. A fixed reply in code is a guarantee, while a prompt instruction is a request. A code check of the citations is planned for 6e.
+- **Duplicate sources:** three chunks from one article show the same file three times. Showing each source once is a small improvement.
+
+**Concepts, in my own words**
+
+- **Grounding:** the model does not know my private help articles, so retrieval supplies them and the model writes the answer from them.
+- **Safer fallback:** when nothing is found, the code returns a fixed reply, so the model never improvises.
+- **Masked search:** the question is masked before the search as well, so personal data does not reach any other component.
