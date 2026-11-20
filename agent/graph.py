@@ -4,6 +4,7 @@ import ollama
 from langgraph.graph import END, START, StateGraph
 
 from agent.guardrails import mask, unmask
+from agent.tools import run_tools
 
 MODEL = "qwen2.5:7b"
 
@@ -31,7 +32,8 @@ CLASSIFY_PROMPT = (
 NO_CONTEXT_REPLY = {
     "knowledge": "I couldn't find this in our help articles. "
                  "Please contact support and they will help you.",
-    "account": "I can't look up account details yet.",
+    "account": "I couldn't find account details. Please share your customer ID "
+               "(for example C001), or contact support.",
 }
 
 
@@ -79,8 +81,8 @@ def retrieve_node(state: State) -> dict:
 
 
 def diagnose_node(state: State) -> dict:
-    # Placeholder until the MCP tools arrive in 6d
-    return {"context": []}
+    # The model decides which read-only MCP tools to call; our code runs them
+    return {"context": run_tools(state["masked_question"], MODEL)}
 
 
 def format_context(context: list) -> str:
@@ -136,14 +138,15 @@ def build_graph():
 if __name__ == "__main__":
     app = build_graph()
     questions = [
-        "My wifi keeps cutting out",
-        "How do I make pasta carbonara?",
         "Hi, I'm John Smith. Can you check the line for C002?",
+        "What plan is customer C001 on?",
+        "Can you check the line for C999?",
+        "My bill looks wrong",
     ]
     for question in questions:
         result = app.invoke({"question": question})
         print("QUESTION:", question)
         print("INTENT  :", result["intent"])
-        print("SOURCES :", [item["source"] for item in result["context"]])
+        print("CONTEXT :", result["context"])
         print("ANSWER  :", result["final_answer"])
         print()
