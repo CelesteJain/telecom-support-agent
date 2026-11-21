@@ -1,0 +1,9 @@
+pytest==9.2.0
+httpx==0.28.1
+fastapi==0.165.0
+pydantic==2.14.4
+ollama==0.6.3
+mcp==1.30.0
+langgraph==1.2.24
+presidio_analyzer==2.2.366
+spacy==3.8.18

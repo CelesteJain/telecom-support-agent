@@ -1,0 +1,26 @@
+name: docker
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t telecom-agent .
+      - name: Smoke test
+        run: |
+          docker run -d --name agent -p 8000:8000 telecom-agent
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          docker logs agent
+          exit 1
