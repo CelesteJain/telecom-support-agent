@@ -245,6 +245,3 @@ The `diagnose` node now lets the model use the read-only MCP tools (`lookup_cust
 - Pydantic rejects empty or oversized messages before any model call.
 - Known gaps: no authentication (the approver must be a logged-in staff member, not the
   customer), and saved state is in memory so a restart loses paused approvals.
-
-**Concepts in my own words**
-- (write 2-3 lines here; "not sure" is fine, but try to rewrite one answer above in your own words)
