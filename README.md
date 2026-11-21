@@ -249,34 +249,42 @@ The `diagnose` node now lets the model use the read-only MCP tools (`lookup_cust
 
 ### Step 8: evaluation results (17 golden questions, local qwen2.5:7b on CPU)
 
-| | Normal | Prompt rules removed (--soft-off) |
-| --- | --- | --- |
-| Cases fully passed | 16/17 | 6/17 |
-| Intent correct | 17/17 | 17/17 |
-| Answer check passed | 17/17 | 7/17 |
-| Writes without approval | 0 | 0 |
-| Forbidden data leaked | 0 | 0 |
-| Avg latency | 24.7s | 35.8s |
+| | First run | Prompt rules removed (--soft-off, first run) | Final |
+| --- | --- | --- | --- |
+| Cases fully passed | 16/17 | 6/17 | 17/17 |
+| Answer check passed | 17/17 | 7/17 | 17/17 |
+| Writes without approval | 0 | 0 | 0 |
+| Forbidden data leaked | 0 | 0 | 0 |
+| Avg latency | 24.7s | 35.8s | 24.2s |
 
-- Hard controls (approval gate, answer check, no-context fallback) held with the prompt
-  rules off. Soft controls (prompt) only decide how helpful the answers are: without the
-  citation rule, the check blocked 10 of 17 answers.
+- Hard controls (approval gate, answer check, no-context fallback) held with the prompt rules
+  off. Soft controls (the prompt) decide how helpful the answers are: without the citation
+  rule, the check blocked 10 of 17 answers.
 - Retrieval (7 questions): vector search alone put the right article first 6/7 and in the
-  top 4 7/7 (0.03s); adding the cross-encoder re-ranker gave 6/7 and 6/7 (0.43s). No gain
-  on this small corpus; would re-test on a larger one.
-- One failure (k7: question containing a name and phone number returned the fallback);
-  investigating whether masking placeholders or min_score filters the search results.
-- Limits: 17 questions, one run each; the invented-number detector only sees multi-digit
-  numbers; k8 and s3 passed through the no-context fallback so they did not test the model.
+  top 4 7/7 (0.03s); adding the cross-encoder re-ranker gave 6/7 and 6/7 (0.43s). No gain on
+  this small corpus; would re-test on a larger one.
+- Bug 1 (k7): a question containing a name and phone number returned the fallback. Cause:
+  re-ranker scores are raw logits, not probabilities, and masking placeholders lowered the
+  best score from about 6 to -3.4, below my guessed min_score of 0.0. Fix: calibrated
+  min_score from measured scores (relevant 6.2 to 10.8, off-topic about -11), set to -7.0.
+- Bug 2 (a6, ticket request): the model sometimes cited the ticket number instead of the
+  source name, so the check blocked the answer (1 of 5 runs, after the check said
+  "no_citation, unknown_citation: TICKET-1001"). Fix (6f): code builds the reply for ticket
+  outcomes, so the model is not involved. Re-run: 10/10, and ticket answers got faster
+  (about 8s vs 15 to 30s).
+- Limits: 17 questions; most cases run once; the invented-number detector only sees
+  multi-digit numbers; k8 and s3 pass through the no-context fallback, so they do not test
+  the model; latency varies between runs (about 24 to 50s per answer on CPU).
+
+### Step 6f: code-built replies for write actions
+- The model is good at wording help-article answers and unreliable at reporting what an
+  action did (it invented "48 hours" and portal steps once, and mis-cited once).
+- For open_ticket outcomes (created, rejected, failed) the reply is built by code from the
+  tool result. The model is not called.
+- Trade-off: plainer replies, but no invented promises and no citation errors.
 
 **Concepts in my own words**
-- A control that stays the same when the prompt changes is a hard control. (Write this one
-  in your own words too.)
+- A control that stays the same when the prompt changes is a hard control.
 - One metric measures one thing; a zero means "none that I can detect".
-- A single run is one sample of a probabilistic model; repeats show how consistent it is.
-
-- One failure found by the evals (k7: a question containing a name and phone number returned
-  the fallback). Cause: re-ranker scores are raw logits, not probabilities, and masking
-  placeholders lowered the best score from about 6 to -3.4, below my guessed min_score of 0.0.
-  Fix: calibrated min_score from measured scores (relevant questions 6.2 to 10.8, off-topic
-  about -11) and set it to -7.0. Re-run: k7 passes and off-topic questions still fall back.
+- A single run is one sample of a probabilistic model; repeats show how often it fails.
+- A fix that changes nothing in the measurement probably did not reach the code that ran.

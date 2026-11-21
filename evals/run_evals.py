@@ -24,7 +24,7 @@ CUSTOMERS = {c["id"]: c for c in
 SOFT_OFF_PROMPT = "You are a customer support assistant for a telecom company."
 
 
-def load_cases(limit=None) -> list:
+def load_cases(limit=None, only=None) -> list:
     cases = [json.loads(line) for line in GOLDEN.read_text(encoding="utf-8").splitlines()
              if line.strip()]
     for case in cases:  # fail early if an expected article name is wrong
@@ -32,6 +32,11 @@ def load_cases(limit=None) -> list:
             if not source.startswith("tool:") and not (ARTICLES / source).exists():
                 raise SystemExit(f"{case['id']}: expected article {source} not found in "
                                  f"data/articles. Fix the name in golden.jsonl.")
+    if only:  # run just these case ids
+        unknown = set(only) - {c["id"] for c in cases}
+        if unknown:
+            raise SystemExit(f"Unknown case id(s): {sorted(unknown)}")
+        cases = [c for c in cases if c["id"] in only]
     return cases[:limit] if limit else cases
 
 
@@ -79,7 +84,8 @@ def score(case: dict, result: dict, paused: bool) -> dict:
                              for t in case["expect_text"])
     if "expect_pause" in case:
         row["pause_ok"] = paused == case["expect_pause"]
-    row["check_ok"] = not result.get("problems")
+    row["problems"] = result.get("problems", [])
+    row["check_ok"] = not row["problems"]
     row["leaks"] = leaked(result["final_answer"], case)
     row["invented"] = invented_numbers(result["final_answer"], allowed)
     row["write_without_pause"] = ticket_created and not paused
@@ -123,7 +129,7 @@ def run_graph_suite(args):
         g.SYSTEM_PROMPT = SOFT_OFF_PROMPT
     graph = g.build_graph()
     rows = []
-    for case in load_cases(args.limit):
+    for case in load_cases(args.limit, args.only):
         for _ in range(args.repeats):
             row = run_case(graph, case)
             rows.append(row)
@@ -151,6 +157,7 @@ def run_graph_suite(args):
         if 'error' in r or not passed(r):
             why = [k for k in ("intent_ok", "source_ok", "text_ok", "pause_ok", "check_ok")
                    if r.get(k) is False]
+            if r.get("problems"): why.append(f"problems={r['problems']}")
             if r.get("leaks"): why.append(f"leaks={r['leaks']}")
             if r.get("invented"): why.append(f"invented={r['invented']}")
             if r.get("write_without_pause"): why.append("write_without_pause")
@@ -163,7 +170,7 @@ def run_graph_suite(args):
 
 def run_retrieval_suite(args):
     from rag.search import search
-    cases = [c for c in load_cases(args.limit)
+    cases = [c for c in load_cases(args.limit, args.only)
              if c["expect_intent"] == "knowledge" and c.get("expect_source")]
     print(f"=== retrieval suite: {len(cases)} questions ===")
     out = {}
@@ -195,6 +202,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("suite", choices=["graph", "retrieval"])
     parser.add_argument("--limit", type=int, help="only the first N cases")
+    parser.add_argument("--only", nargs="+", help="run only these case ids, e.g. --only a6 k7")
     parser.add_argument("--repeats", type=int, default=1, help="run each case N times")
     parser.add_argument("--soft-off", action="store_true", help="remove the prompt rules")
     parser.add_argument("--tag", default="", help="suffix for the saved file name")

@@ -134,19 +134,43 @@ def approval_node(state: State) -> dict:
         item = {"source": f"tool:{pending['tool']}", "text": json.dumps(result)}
     else:
         item = {"source": f"tool:{pending['tool']}",
-                "text": "The request was rejected by a human reviewer. No ticket was created."}
+                "text": json.dumps({"status": "rejected"})}
     return {"context": state["context"] + [item], "pending": None}
 
 
 def format_context(context: list) -> str:
     return "\n\n".join(f"[{item['source']}]\n{item['text']}" for item in context)
 
+def action_reply(context: list):
+    """Build the reply for a write action in CODE, so the model cannot invent
+    promises or steps. Returns None when there is no action outcome to report."""
+    for item in context:
+        if item["source"] != "tool:open_ticket":
+            continue
+        try:
+            data = json.loads(item["text"])
+        except ValueError:
+            return None
+        tag = " [tool:open_ticket]"  # keeps the citation check happy and the source visible
+        if data.get("status") == "rejected":
+            return "No ticket was created, because the request was not approved." + tag
+        if "ticket_id" in data:
+            return (f"I've opened ticket {data['ticket_id']} "
+                    f"for customer {data['customer_id']}." + tag)
+        return ("I couldn't open the ticket. Please check the customer ID "
+                "or contact support." + tag)
+    return None
 
 def answer_node(state: State) -> dict:
     # Nothing found: do not ask the model, which would only improvise
     if not state["context"]:
         return {"answer": NO_CONTEXT_REPLY[state["intent"]]}
 
+    # An action outcome (ticket opened, rejected, failed) is reported by code, not by the model
+    reply_text = action_reply(state["context"])
+    if reply_text:
+        return {"answer": reply_text}
+    
     user_message = (
         f"Context:\n{format_context(state['context'])}\n\n"
         f"Customer question: {state['masked_question']}"
