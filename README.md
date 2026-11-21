@@ -245,3 +245,32 @@ The `diagnose` node now lets the model use the read-only MCP tools (`lookup_cust
 - Pydantic rejects empty or oversized messages before any model call.
 - Known gaps: no authentication (the approver must be a logged-in staff member, not the
   customer), and saved state is in memory so a restart loses paused approvals.
+
+
+### Step 8: evaluation results (17 golden questions, local qwen2.5:7b on CPU)
+
+| | Normal | Prompt rules removed (--soft-off) |
+| --- | --- | --- |
+| Cases fully passed | 16/17 | 6/17 |
+| Intent correct | 17/17 | 17/17 |
+| Answer check passed | 17/17 | 7/17 |
+| Writes without approval | 0 | 0 |
+| Forbidden data leaked | 0 | 0 |
+| Avg latency | 24.7s | 35.8s |
+
+- Hard controls (approval gate, answer check, no-context fallback) held with the prompt
+  rules off. Soft controls (prompt) only decide how helpful the answers are: without the
+  citation rule, the check blocked 10 of 17 answers.
+- Retrieval (7 questions): vector search alone put the right article first 6/7 and in the
+  top 4 7/7 (0.03s); adding the cross-encoder re-ranker gave 6/7 and 6/7 (0.43s). No gain
+  on this small corpus; would re-test on a larger one.
+- One failure (k7: question containing a name and phone number returned the fallback);
+  investigating whether masking placeholders or min_score filters the search results.
+- Limits: 17 questions, one run each; the invented-number detector only sees multi-digit
+  numbers; k8 and s3 passed through the no-context fallback so they did not test the model.
+
+**Concepts in my own words**
+- A control that stays the same when the prompt changes is a hard control. (Write this one
+  in your own words too.)
+- One metric measures one thing; a zero means "none that I can detect".
+- A single run is one sample of a probabilistic model; repeats show how consistent it is.
