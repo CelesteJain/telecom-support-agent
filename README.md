@@ -274,3 +274,9 @@ The `diagnose` node now lets the model use the read-only MCP tools (`lookup_cust
   in your own words too.)
 - One metric measures one thing; a zero means "none that I can detect".
 - A single run is one sample of a probabilistic model; repeats show how consistent it is.
+
+- One failure found by the evals (k7: a question containing a name and phone number returned
+  the fallback). Cause: re-ranker scores are raw logits, not probabilities, and masking
+  placeholders lowered the best score from about 6 to -3.4, below my guessed min_score of 0.0.
+  Fix: calibrated min_score from measured scores (relevant questions 6.2 to 10.8, off-topic
+  about -11) and set it to -7.0. Re-run: k7 passes and off-topic questions still fall back.
